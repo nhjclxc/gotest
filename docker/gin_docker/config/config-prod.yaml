@@ -1,0 +1,4 @@
+Name: config_02_service
+Port: 19090
+Env: gin_docker-prod
+Version: prod-1.1.1

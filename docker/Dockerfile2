@@ -1,0 +1,50 @@
+# 第一阶段：构建阶段
+# 2. 使用官方 Go 镜像作为构建阶段，（如果是在容器内部编译源码就要这个基础镜像，如果容器内部直接使用go编译出的可执行文件就可以不要这个基础镜像）
+# FROM golang:1.22.3 AS builder
+# https://docker.aityp.com/image/docker.io/library/golang:1.22.3
+# docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.22.3
+# docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.22.3  docker.io/library/golang:1.22.3
+FROM docker.io/library/golang:1.22.3 AS builder
+
+# 设置golang代理
+ENV GOPROXY=https://goproxy.cn,direct
+
+# 定义工作目录
+WORKDIR /app
+
+# 下载依赖包
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 源码复制
+COPY . .
+
+# 编译可执行文件
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gin_docker_origin main.go
+
+
+
+# 第二阶段：运行阶段，使用精简版镜像，使用更小的镜像进行部署，Alpine是一个轻量级的Linux发行版，超小型 Linux 发行版
+# FROM alpine:latest
+# https://docker.aityp.com/image/docker.io/library/alpine:latest
+# docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:latest
+# docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:latest  docker.io/library/alpine:latest
+FROM docker.io/library/alpine:latest
+
+# 设置时区（可选）
+RUN rm -f /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+# 定义工作目录
+WORKDIR /app
+
+# 拷贝构建好的二进制文件，从 前面的构建阶段 builder 中，复制 /app/gin_docker_origin 文件到当前镜像的 /app/gin_docker_origin 路径。
+COPY --from=builder /app/gin_docker_origin /app/gin_docker_origin
+
+# 给应用添加所有权限
+RUN chmod 777 /app/gin_docker_origin
+
+# 暴露端口（根据项目端口修改）EXPOSE 本身不会真正把端口暴露到宿主机，它只是用来声明容器内部会监听哪些端口。
+EXPOSE 18080 18090 19090
+
+# 设定启动命令
+CMD ["/app/gin_docker_origin", "-c", "/app/config.yaml"]
