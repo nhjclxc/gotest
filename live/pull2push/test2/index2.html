@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>FLV Live 播放器</title>
+    <script src="https://cdn.jsdelivr.net/npm/flv.js@latest/dist/flv.min.js"></script>
+</head>
+<body>
+<h2>FLV 直播播放</h2>
+
+<!--<label for="streamUrl">直播流地址（例如：http://localhost:7001/live/room1.flv）:</label><br>-->
+<label for="streamUrl">直播流地址（例如：http://localhost:8080/live.flv）:</label><br>
+<input type="text" id="streamUrl" value="http://localhost:8080/live.flv" style="width: 600px;">
+<button onclick="startPlay()">播放</button>
+
+<hr>
+
+<video id="videoElement" controls autoplay style="width: 800px; height: 450px;"></video>
+
+<script>
+    let player;
+
+    function startPlay() {
+        const url = document.getElementById("streamUrl").value.trim();
+        const videoElement = document.getElementById("videoElement");
+
+        // 销毁旧的 player 实例
+        if (player) {
+            player.destroy();
+            player = null;
+        }
+
+        if (flvjs.isSupported()) {
+            player = flvjs.createPlayer({
+                type: 'flv',
+                url: url
+            });
+
+            player.attachMediaElement(videoElement);
+            player.load();
+            player.play();
+        } else {
+            alert("当前浏览器不支持 flv.js 播放！");
+        }
+    }
+</script>
+</body>
+</html>

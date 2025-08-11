@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>flv.js via WebSocket demo</title>
+</head>
+<body>
+<video id="videoElement" controls autoplay muted playsinline style="width:100%;max-width:800px"></video>
+
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1.5.0/dist/flv.min.js"></script>
+<script>
+    if (flvjs.isSupported()) {
+        const videoElement = document.getElementById('videoElement');
+
+        // ws 地址：要和后端 WebSocket 服务的路径一致
+        const wsUrl = 'http://localhost:8080/live/test-room/123';
+        // const wsUrl = 'http://192.168.203.182:8080/live/livestream.flv';
+
+        const player = flvjs.createPlayer({
+            type: 'flv',
+            url: wsUrl,
+            isLive: true,
+            // 如果没有音频可设 hasAudio:false
+            hasAudio: true,
+            hasVideo: true
+        });
+
+        player.attachMediaElement(videoElement);
+        player.load();
+        player.play().catch(e => console.warn('play error', e));
+    } else {
+        alert('flv.js not supported in this browser');
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Go中间层拉流转推示例</title>
+    <script src="flv.min.js"></script>
+    <style>
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        video {
+            width: 80%;
+            max-height: 80%;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+
+<video id="videoElement" controls autoplay muted></video>
+
+<script>
+    if (flvjs.isSupported()) {
+        const videoElement = document.getElementById('videoElement');
+
+        function createPlayer() {
+            if (window.flvPlayer) {
+                window.flvPlayer.destroy();
+            }
+
+            const flvPlayer = flvjs.createPlayer({
+                type: 'flv',
+                isLive: true,
+                url: location.protocol.replace('http', 'ws') + '//' + location.hostname + ':8080/live.flv'
+            }, {
+                enableWorker: true,
+                enableStashBuffer: false, // 减少延迟
+                stashInitialSize: 128,
+                lazyLoad: false
+            });
+
+            flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.load();
+            flvPlayer.play();
+
+            // 断线重连
+            flvPlayer.on(flvjs.Events.ERROR, (errType, errDetail) => {
+                console.error('flv.js error:', errType, errDetail);
+                setTimeout(createPlayer, 3000);
+            });
+
+            window.flvPlayer = flvPlayer;
+        }
+
+        createPlayer();
+    } else {
+        alert('flv.js 不支持当前浏览器，请使用 Chrome/Edge 等现代浏览器');
+    }
+</script>
+
+</body>
+</html>

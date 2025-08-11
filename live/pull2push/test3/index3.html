@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>flv.js websocket demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+</head>
+<body>
+<h3>WebSocket FLV Player</h3>
+<video id="videoElement" controls autoplay muted style="width:640px; height:360px;"></video>
+
+<script>
+    if (flvjs.isSupported()) {
+        var videoElement = document.getElementById('videoElement');
+
+        // flv.js 支持 ws(s):// 作为加载器：用 type: 'flv' + url 'ws://host:8080/ws/flv'
+        // 注意：flv.js 期望服务器直接返回 FLV 字节流（我们正好这么做）
+        var flvPlayer = flvjs.createPlayer({
+            type: 'flv',
+            isLive: true,
+            // 使用 websocket 协议（flv.js 会在内部将 ws 适配为 xhr-streaming）
+            url: 'ws://' + location.hostname + ':8080/ws/flv'
+        }, {
+            enableWorker: false,
+            stashInitialSize: 128
+        });
+
+        flvPlayer.attachMediaElement(videoElement);
+        flvPlayer.load();
+        flvPlayer.play();
+    } else {
+        alert('flv.js is not supported in this browser.');
+    }
+</script>
+</body>
+</html>

@@ -44,10 +44,10 @@ func main() {
 		context.String(http.StatusOK, "我是 news 页面【【【2.0需求页面】】】，当前环境是：%#v，现在请求的文章id = %v, name = %v， \n", config.GlobalConfig, id, name)
 	})
 
-	// go run main.go
-	// go run main.go -c config/config-dev.yaml
-	// go run main.go -c config/config-test.yaml
-	// go run main.go -c config/config-prod.yaml
+	// go run main8.go
+	// go run main8.go -c config/config-dev.yaml
+	// go run main8.go -c config/config-test.yaml
+	// go run main8.go -c config/config-prod.yaml
 
 	//启动端口监听
 	//router.Run(":8090")

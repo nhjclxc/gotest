@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>FLV 转推示例（WebSocket + flv.js）</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 16px; }
+        #video { width: 800px; height: 450px; background: #000; }
+        input[type=text] { width: 600px; }
+    </style>
+</head>
+<body>
+<h2>FLV 拉流转推示例（WebSocket）</h2>
+
+<p>
+    上游 FLV URL:
+    <input id="upstream" type="text" value="http://192.168.203.182:8080/live/livestream.flv"/>
+    <button id="start">开始播放</button>
+</p>
+
+<video id="video" controls></video>
+<p id="status">状态：空闲</p>
+
+<!-- flv.js -->
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+<script>
+    const startBtn = document.getElementById('start');
+    const upstreamInput = document.getElementById('upstream');
+    const status = document.getElementById('status');
+    let player = null;
+
+    startBtn.addEventListener('click', () => {
+        const upstream = upstreamInput.value.trim();
+        if (!upstream) { alert('请输入上游 FLV URL'); return; }
+
+        // websocket 连接到服务端，服务端再去拉 upstream（注意需要 url encode）
+        const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://')
+            + location.host + '/ws?url=' + encodeURIComponent(upstream);
+
+        if (player) {
+            player.destroy();
+            player = null;
+        }
+
+        if (flvjs.isSupported()) {
+            player = flvjs.createPlayer({
+                type: 'flv',
+                url: wsUrl,
+                isLive: true
+            });
+            player.attachMediaElement(document.getElementById('video'));
+            player.load();
+            player.play().catch(e => {
+                console.warn('play error', e);
+            });
+
+            status.innerText = '状态：正在通过 websocket 拉取（' + wsUrl + '）';
+        } else {
+            alert('flv.js 不受支持（请使用支持 MediaSource Extensions 的浏览器）');
+        }
+    });
+</script>
+</body>
+</html>

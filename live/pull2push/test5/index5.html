@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>FLV.js 直播播放</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        video {
+            width: 80%;
+            height: auto;
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+<video id="videoElement" controls autoplay muted></video>
+
+<script>
+    if (flvjs.isSupported()) {
+        var videoEl = document.getElementById('videoElement');
+        var player = flvjs.createPlayer({
+            type: 'flv',        // 播放类型
+            isLive: true,       // 是否直播
+            url: 'ws://' + location.hostname + ':8080/ws/flv' // Go 后端的 WebSocket FLV 地址
+        });
+        player.attachMediaElement(videoEl);
+        player.load();
+        player.play();
+    } else {
+        alert("当前浏览器不支持 flv.js 播放 FLV 流");
+    }
+</script>
+</body>
+</html>
