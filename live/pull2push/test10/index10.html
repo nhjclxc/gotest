@@ -14,11 +14,13 @@
         console.log(uuid);
         // 例子: "3b241101-e2bb-4255-8caf-4136c566a962"
 
+        var url = 'http://localhost:8080/live/test1/' + uuid
+
 
         var videoElement = document.getElementById('videoElement');
         var flvPlayer = flvjs.createPlayer({
             type: 'flv',
-            url: 'http://localhost:8080/live/test1/' + uuid,  // 你的 Go 转推接口地址
+            url: url,  // 你的 Go 转推接口地址
             isLive: true,
             // 如果没有音频可设 hasAudio:false
             hasAudio: true,

@@ -2,14 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
+	"pull2push/test10/flvparser"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -56,17 +58,18 @@ func main() {
 
 	// http://localhost:8080/live
 	r.GET("/live/:brokerKey/:clientId", func(c *gin.Context) {
+
 		c.Header("Content-Type", "video/x-flv")
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Transfer-Encoding", "chunked")
 		c.Header("Cache-Control", "no-cache")
 		c.Header("Connection", "keep-alive")
-
-		c.Writer.Header().Set("Content-Type", "video/x-flv")
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Connection", "keep-alive")
-		c.Writer.Header().Set("Cache-Control", "no-cache")
-		c.Writer.Header().Set("Pragma", "no-cache")
-		c.Writer.Header().Set("Expires", "0")
-		c.Writer.WriteHeader(http.StatusOK)
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		//c.Writer.WriteHeader(http.StatusOK)
+		// 确保响应缓冲区被刷新
+		c.Writer.Flush()
 
 		brokerKey := c.Param("brokerKey")
 		clientId := c.Param("clientId")
@@ -79,7 +82,7 @@ func main() {
 		//// 或者使用以下逻辑
 		c.Stream(func(w io.Writer) bool {
 
-			httpStreamClient, err := NewHttpStreamClient(c, brokerKey, clientId, streamBroker.dataCh, streamBroker.gOPCache)
+			httpStreamClient, err := NewHttpStreamClient(c, brokerKey, clientId, streamBroker.dataCh, streamBroker.gOPCache, streamBroker)
 			if err != nil {
 				c.JSON(500, err)
 				return false
@@ -144,10 +147,15 @@ func (b *Broadcaster) AddStreamBroker(streamBroker *StreamBroker) {
 
 // StreamBroker 每个 直播地址 用一个 Broker 管理，里面管理了多个当前直播链接的客户端
 type StreamBroker struct {
-	brokerKey   string      // 直播房间的唯一编号
-	upstreamURL string      // 直播房间的上游拉流地址
-	dataCh      chan []byte // 上游拉流缓存的数据
-	gOPCache    *GOPCache   // 保留关键帧数据
+	brokerKey   string               // 直播房间的唯一编号
+	upstreamURL string               // 直播房间的上游拉流地址
+	dataCh      chan []byte          // 上游拉流缓存的数据
+	gOPCache    *GOPCache            // 保留关键帧数据
+	flvParser   *flvparser.FLVParser // 创建FLV解析器 (启用调试模式)
+
+	headerMutex  sync.RWMutex
+	headerBytes  []byte
+	headerParsed bool
 
 	clientMutex sync.Mutex                   // 客户端的异步操作控制器
 	clientMap   map[string]*HttpStreamClient // map[clientId]HttpStreamClient 存储这个broker里面所有的客户端
@@ -239,33 +247,36 @@ func (b *StreamBroker) pullLoop() {
 			continue
 		}
 
+		b.doFlvParse(resp.Body)
+
 		// 成功连接，重置 backoff
 		backoff = time.Second
 
 		first := true
 		// 读取本次拉到的流数据，并且进行数据分发
 		buf := make([]byte, 4096)
-		headerTemp := make([]byte, 0)
-		totalSize := 0
+		//headerTemp := make([]byte, 0)
+		//totalSize := 0
 		for {
 			n, err := resp.Body.Read(buf)
 			if n > 0 {
 				if first {
-					if totalSize == 0 {
-						dataSize := uint32(buf[1])<<16 | uint32(buf[2])<<8 | uint32(buf[3])
-						totalSize = 11 + int(dataSize) + 4 // tag header + data + prevTagSize
-					}
+					//if totalSize == 0 {
+					//	dataSize := uint32(buf[1])<<16 | uint32(buf[2])<<8 | uint32(buf[3])
+					//	totalSize = 11 + int(dataSize) + 4 // tag header + data + prevTagSize
+					//}
+					//
+					//headerTemp = append(headerTemp, buf[:n]...)
+					//fmt.Println("构造headerTemp， ", len(headerTemp), "totalSize = ", totalSize)
+					//if len(headerTemp) >= totalSize {
+					//	err = b.readOneFlvTag(headerTemp[:totalSize])
+					//	if err != nil {
+					//		log.Println("关键帧读取失败 readOneFlvTag error:", err)
+					//	}
+					//
+					//	first = false
+					//}
 
-					headerTemp = append(headerTemp, buf[:n]...)
-					fmt.Println("构造headerTemp， ", len(headerTemp), "totalSize = ", totalSize)
-					if len(headerTemp) >= totalSize {
-						err = b.readOneFlvTag(headerTemp[:totalSize])
-						if err != nil {
-							log.Println("关键帧读取失败 readOneFlvTag error:", err)
-						}
-
-						first = false
-					}
 				}
 				// copy bytes to avoid race
 				cp := make([]byte, n)
@@ -297,6 +308,42 @@ func (b *StreamBroker) pullLoop() {
 		// small backoff before reconnect
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+func (sb *StreamBroker) doFlvParse(body io.ReadCloser) {
+
+	ctx := context.Background()
+	_ = ctx
+	// 创建FLV解析器 (启用调试模式)
+	sb.flvParser = flvparser.NewFLVParser(true)
+
+	fmt.Println("开始解析FLV流...")
+	fmt.Println("等待解析视频和音频标签...")
+
+	// 使用带超时的方法解析FLV头部和初始标签
+	err := sb.flvParser.ParseInitialTags(ctx, body)
+	if err != nil {
+		fmt.Printf("解析FLV失败: %v\n", err)
+
+		panic(err)
+	}
+	sb.flvParser.PrintRequiredTags()
+
+	// 获取必要的FLV头和标签字节
+	headerBytes, err := sb.flvParser.GetRequiredTagsBytes()
+	if err != nil {
+		body.Close()
+		fmt.Println("获取FLV头部字节失败: %v", err)
+	}
+
+	// 保存头部字节供后续使用
+	sb.headerMutex.Lock()
+	sb.headerBytes = headerBytes
+	sb.headerParsed = true
+	sb.headerMutex.Unlock()
+
+	slog.Info("FLV头部解析完成，等待客户端连接开始转发", "bytes", len(headerBytes))
+
 }
 
 // readOneFlvTag 从 src 读取一个完整的 FLV Tag，返回 Tag 和读取的字节数
@@ -464,18 +511,18 @@ type HttpStreamClient struct {
 
 	// http连接相关
 	httpRequest         *http.Request
-	responseWriter      gin.ResponseWriter
+	responseWriter      io.Writer
 	flusher             http.Flusher
 	httpCloseSig        <-chan struct{} // 当这个请求被客户端主动被关闭时触发
 	httpRequestCloseSig <-chan struct{} // 当这个请求被客户端主动被关闭时触发
 }
 
-func NewHttpStreamClient(c *gin.Context, brokerKey, clientId string, dataCh1 chan []byte, gOPCache *GOPCache) (*HttpStreamClient, error) {
+func NewHttpStreamClient(c *gin.Context, brokerKey, clientId string, dataCh1 chan []byte, gOPCache *GOPCache, streamBroker *StreamBroker) (*HttpStreamClient, error) {
 	// 创建一个带缓冲的双向通道，缓冲大小根据需求调节
 	dataCh := make(chan []byte, 4096)
 
 	// gin.ResponseWriter 是接口，不能用指针
-	writer := c.Writer
+	var writer io.Writer = c.Writer
 
 	// 断言出 http.Flusher 接口，方便主动刷新数据
 	flusher, ok := writer.(http.Flusher)
@@ -498,34 +545,52 @@ func NewHttpStreamClient(c *gin.Context, brokerKey, clientId string, dataCh1 cha
 
 	fmt.Println("客户端连接成功 clientId = ", clientId)
 
-	// 先发 GOP 缓存数据
-	gop := gOPCache.GetTags()
-	if len(gop) > 0 {
-		data := gop[len(gop)-1].Data
-		chunkSize := 4096
-		for i := 0; i < len(data); i += chunkSize {
-			end := i + chunkSize
-			if end > len(data) {
-				end = len(data)
-			}
-			dataTemp := data[i:end]
+	// 确保头部信息已解析
+	streamBroker.headerMutex.RLock()
+	headerParsed := streamBroker.headerParsed
+	headerBytes := streamBroker.headerBytes
+	streamBroker.headerMutex.RUnlock()
 
-			_, err := hc.responseWriter.Write(dataTemp)
-			if err != nil {
-				// 写出错，关闭连接
-				return nil, errors.New("发送关键帧失败！！！" + err.Error())
-			}
-			hc.flusher.Flush()
-		}
-
-		_, err := hc.responseWriter.Write(gop[len(gop)-1].ToBytes())
-		if err != nil {
-			// 写出错，关闭连接
-			return nil, errors.New("发送关键帧失败！！！" + err.Error())
-		}
-		hc.flusher.Flush()
-		fmt.Println("关键帧发送完成！！！")
+	if !headerParsed {
+		return nil, fmt.Errorf("FLV头部尚未解析完成，请先调用Start()")
 	}
+
+	// 一次性写入头部数据
+	if _, err := writer.Write(headerBytes); err != nil {
+		return nil, fmt.Errorf("写入FLV头部失败: %v", err)
+	}
+
+	slog.Info("FLV头部数据写入完成")
+
+	//
+	//// 先发 GOP 缓存数据
+	//gop := gOPCache.GetTags()
+	//if len(gop) > 0 {
+	//	data := gop[len(gop)-1].Data
+	//	chunkSize := 4096
+	//	for i := 0; i < len(data); i += chunkSize {
+	//		end := i + chunkSize
+	//		if end > len(data) {
+	//			end = len(data)
+	//		}
+	//		dataTemp := data[i:end]
+	//
+	//		_, err := hc.responseWriter.Write(dataTemp)
+	//		if err != nil {
+	//			// 写出错，关闭连接
+	//			return nil, errors.New("发送关键帧失败！！！" + err.Error())
+	//		}
+	//		hc.flusher.Flush()
+	//	}
+	//
+	//	_, err := hc.responseWriter.Write(gop[len(gop)-1].ToBytes())
+	//	if err != nil {
+	//		// 写出错，关闭连接
+	//		return nil, errors.New("发送关键帧失败！！！" + err.Error())
+	//	}
+	//	hc.flusher.Flush()
+	//	fmt.Println("关键帧发送完成！！！")
+	//}
 	//
 	//for _, tag := range gop {
 	//	//b.broadcast(tag.ToBytes()) // 先广播给所有客户端
