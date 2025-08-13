@@ -1,0 +1,11 @@
+common:
+  log:
+    level: "debug"
+    file_path: "./data/log/log.log"  # "stdout"
+    max_size: 100
+    max_backups: 3 
+
+
+http:
+  port: "5644"
+
