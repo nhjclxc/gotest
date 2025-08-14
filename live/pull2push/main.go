@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
 	"net/http"
+	cameraBroadcast "pull2push/core/broadcast/camera"
 	flvBroadcast "pull2push/core/broadcast/flv"
 	hlsBroadcast "pull2push/core/broadcast/hls"
+	cameraBroker "pull2push/core/broker/camera"
 	flvBroker "pull2push/core/broker/flv"
 	hlsBroker "pull2push/core/broker/hls"
+	cameraClient "pull2push/core/client/camera"
 	flvClient "pull2push/core/client/flv"
 	hlsClient "pull2push/core/client/hls"
 	"pull2push/middleware"
@@ -34,8 +38,9 @@ import (
 */
 
 var (
-	flvBroadcastPool *flvBroadcast.FLVBroadcaster
-	hlsBroadcastPool *hlsBroadcast.HLSBroadcaster
+	flvBroadcastPool    *flvBroadcast.FLVBroadcaster
+	hlsBroadcastPool    *hlsBroadcast.HLSBroadcaster
+	cameraBroadcastPool *cameraBroadcast.CameraBroadcaster
 )
 
 func main() {
@@ -54,6 +59,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// health
+	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -65,6 +73,9 @@ func main() {
 	var flvStreamBroker *flvBroker.FLVStreamBroker = flvBroker.NewFLVStreamBroker(flvBrokerKey, flvUpstreamURL)
 	flvBroadcastPool.AddBroker(flvBrokerKey, flvStreamBroker)
 
+	// http://localhost:8080/live/flv
+	r.GET("/live/flv/:brokerKey/:clientId", LiveFlv())
+
 	// ============== hls ==============
 
 	hlsBrokerKey := "test-hls"
@@ -74,17 +85,51 @@ func main() {
 	var hlsM3U8Broker *hlsBroker.HLSM3U8Broker = hlsBroker.NewHLSM3U8Broker(ctx, hlsBrokerKey, hlsUpstreamURL, "", 3)
 	hlsBroadcastPool.AddBroker(hlsBrokerKey, hlsM3U8Broker)
 
-	// health
-	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
-
-	// http://localhost:8080/live/flv
-	r.GET("/live/flv/:brokerKey/:clientId", LiveFlv())
-
 	// hls要提供两个接口，一个是 index.m3u8用于客户端第一次调用的时候获取最新数据分片消息的，有助于第二个接口来获取最新的分片数据
 	// 一个是 类似 2689.ts 的接口，用于给客户端请求具体的流数据
 	// http://localhost:8080/live/hls/:brokerKey/:clientId/index.m3u8
 	// http://localhost:8080/live/hls/:brokerKey/:clientId/2689.ts
 	r.GET("/live/hls/:brokerKey/:clientId/*filepath", LiveHLS())
+
+	// ============== camera ==============
+	// ffmpeg -f avfoundation -framerate 30 -video_size 640x480 -i "0:0" -vcodec libx264 -preset veryfast -tune zerolatency -g 30 -acodec aac -ar 44100 -ac 2 -f flv "http://127.0.0.1:8080/live/camera/ingest/test-camera"
+	// ffmpeg -f avfoundation -framerate 30 -video_size 640x480 -i "0:0" -vcodec libx264 -preset veryfast -tune zerolatency -g 30 -acodec aac -ar 44100 -ac 2 -f flv "http://127.0.0.1:8080/live/camera/ingest/test-camera"
+
+	// http://127.0.0.1:8080/live/camera/ingest/test-camera
+	// ffmpeg 推流接口
+	r.POST("/live/camera/ingest/:stream", func(c *gin.Context) {
+		//if !strings.HasPrefix(c.GetHeader("Content-Type"), "video/x-flv") {
+		//	c.String(http.StatusBadRequest, "Content-Type must be video/x-flv")
+		//	return
+		//}
+
+		cameraBroadcastPool = cameraBroadcast.NewCameraBroadcaster()
+		var cameraM3U8Broker *cameraBroker.CameraBroker = cameraBroker.NewCameraBroker(c, 150)
+
+		cameraBroadcastPool.AddBroker(hlsBrokerKey, cameraM3U8Broker)
+
+	})
+
+	// http://127.0.0.1:8080/live/camera/test.flv
+	// HTTP-FLV 拉流接口
+	//r.GET("/live/:stream.flv", func(c *gin.Context) {
+	r.GET("/live/camera/:brokerKey/:clientId", func(c *gin.Context) {
+		brokerKey := c.Param("brokerKey")
+		clientId := c.Param("clientId")
+		broker, err := cameraBroadcastPool.FindBroker(brokerKey)
+		if err != nil {
+			fmt.Printf("未找到对应的广播器 %s \n", brokerKey)
+			return
+		}
+
+		cameraBroker, _ := broker.(*cameraBroker.CameraBroker)
+		client, err := cameraClient.NewCameraLiveClient(c, brokerKey, clientId, cameraBroker.ClientCloseSig, cameraBroker.BrokerCloseSig)
+		if err != nil {
+			return
+		}
+		cameraBroker.AddLiveClient(clientId, client)
+
+	})
 
 	log.Println("listening on :8080")
 	if err := r.Run(":8080"); err != nil {
