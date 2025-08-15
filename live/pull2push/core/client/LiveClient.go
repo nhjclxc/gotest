@@ -8,4 +8,7 @@ type LiveClient interface {
 
 	// Listen 客户端监听器
 	Listen()
+
+	// GetDataChan 获取当前客户端的写通道
+	GetDataChan() chan []byte
 }

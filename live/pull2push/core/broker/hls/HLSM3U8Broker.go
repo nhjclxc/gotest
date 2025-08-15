@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"pull2push/core/broker"
 	"pull2push/core/client"
 	"strconv"
 	"strings"
@@ -72,7 +73,7 @@ func NewHLSM3U8Broker(ctx context.Context, brokerKey, upstreamURL, variant strin
 	}
 
 	// 开始持续拉流
-	go hmb.PullLoop()
+	go hmb.PullLoop(broker.BrokerOptional{})
 
 	// 开启必要的状态监听
 	go hmb.ListenStatus()
@@ -165,7 +166,7 @@ func (hmb *HLSM3U8Broker) fetchOnce(ctx context.Context, client *http.Client, u 
 // PullWorker 持续从上游拉取分片并写入 stream state
 
 // PullLoop 持续去直播原地址拉流/数据
-func (hmb *HLSM3U8Broker) PullLoop() {
+func (hmb *HLSM3U8Broker) PullLoop(bo broker.BrokerOptional) {
 	/*
 		这是一个后台 goroutine，用来持续从某个 HLS 上游地址拉取数据。
 		它先请求 Master Playlist，如果是多码率流，选择合适变体变成 Media Playlist。

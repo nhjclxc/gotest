@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"pull2push/core/broker"
 	"pull2push/core/client"
 	"sync"
 	"time"
@@ -49,7 +50,7 @@ func NewFLVStreamBroker(brokerKey, upstreamURL string) *FLVStreamBroker {
 	}
 
 	// start pulling loop
-	go b.PullLoop()
+	go b.PullLoop(broker.BrokerOptional{})
 	fmt.Printf("\n newBroker = %#v \n", &b)
 
 	return &b
@@ -97,7 +98,7 @@ func (b *FLVStreamBroker) ListenStatus() {
 }
 
 // PullLoop 持续去服务端拉流
-func (b *FLVStreamBroker) PullLoop() {
+func (b *FLVStreamBroker) PullLoop(bo broker.BrokerOptional) {
 	backoff := time.Second
 	for {
 		log.Println("dial upstream", b.UpstreamURL)
@@ -287,7 +288,7 @@ func (b *FLVStreamBroker) Broadcast2LiveClient(data []byte) {
 		c.Broadcast(data)
 		////fmt.Printf("send non-blocking %#v \n\n", c.dataCh)
 		//select {
-		//case c.DataCh <- data:
+		//case c.dataCh <- data:
 		//	//fmt.Println("发送数据成功")
 		//default:
 		//	// 客户端慢，丢包并继续

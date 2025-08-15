@@ -16,10 +16,7 @@ type CameraBroadcaster struct {
 	//  负责协调所有的拉流链接 FLVStreamBroker 直接的工作
 	brokerMap map[string]broker.Broker // key为直播房间号
 
-	mu       sync.Mutex
-	clients  map[chan []byte]struct{}
-	cache    [][]byte
-	maxCache int
+	mu sync.Mutex
 }
 
 func NewCameraBroadcaster() *CameraBroadcaster {

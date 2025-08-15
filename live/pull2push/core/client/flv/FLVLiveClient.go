@@ -6,7 +6,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	flvBroadcast "pull2push/core/broadcast/flv"
 	"pull2push/core/broker/flv"
+	flvBroker "pull2push/core/broker/flv"
 	"runtime/debug"
 )
 
@@ -126,6 +128,10 @@ func (hc *FLVLiveClient) Listen() {
 	}
 }
 
+// GetDataChan 获取当前客户端的写通道
+func (hc *FLVLiveClient) GetDataChan() chan []byte {
+	return hc.DataCh
+}
 func (hc *FLVLiveClient) Broadcast(data []byte) {
 
 	defer func() {
@@ -147,4 +153,51 @@ func (hc *FLVLiveClient) Broadcast(data []byte) {
 	}
 	hc.flusher.Flush()
 
+}
+
+// ---------- HTTP 服务 ----------
+
+// LiveFlv 处理 flv 的拉流转推
+func LiveFlv(flvBroadcastPool *flvBroadcast.FLVBroadcaster) func(c *gin.Context) {
+	return func(c *gin.Context) {
+
+		c.Header("Content-Type", "video/x-flv")
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Transfer-Encoding", "chunked")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
+		// 确保响应缓冲区被刷新
+		c.Writer.Flush()
+
+		brokerKey := c.Param("brokerKey")
+		clientId := c.Param("clientId")
+
+		broker, _ := flvBroadcastPool.FindBroker(brokerKey)
+		flvStreamBroker, _ := broker.(*flvBroker.FLVStreamBroker)
+		flvStreamBroker.RemoveLiveClient(clientId)
+
+		// 阻塞客户端
+		//<-c.Request.Context().Done()
+
+		//// 或者使用以下逻辑
+		c.Stream(func(w io.Writer) bool {
+
+			liveFLVClient, err := NewFLVLiveClient(c, brokerKey, clientId, flvStreamBroker.DataCh, flvStreamBroker.GOPCache, flvStreamBroker)
+			if err != nil {
+				c.JSON(500, err)
+				return false
+			}
+
+			flvStreamBroker.AddLiveClient(clientId, liveFLVClient)
+
+			// 这里写数据推送逻辑，或者直接阻塞直到连接关闭
+			<-c.Request.Context().Done()
+			return false
+		})
+
+	}
 }

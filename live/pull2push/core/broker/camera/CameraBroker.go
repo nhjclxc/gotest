@@ -3,9 +3,8 @@ package camera
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"io"
 	"log"
+	"pull2push/core/broker"
 	"pull2push/core/client"
 	"sync"
 )
@@ -29,14 +28,12 @@ import (
 // CameraBroker 每个 直播地址 用一个 Broker 管理，里面管理了多个当前直播链接的客户端
 type CameraBroker struct {
 	// 直播数据相关
-	BrokerKey    string   // 直播房间的唯一编号
-	cache        [][]byte // 内存缓存最近的若干个 FLV 包，方便新客户端秒开
-	cacheRWMutex sync.RWMutex
-	maxCache     int          // 缓存最大长度，防止内存无限增长
-	ctx          *gin.Context // 推流原请求对象
+	BrokerKey string // 直播房间的唯一编号
+	//cache        [][]byte // 内存缓存最近的若干个 FLV 包，方便新客户端秒开  缓存最近一个 GOP（关键帧 + 后续帧）
+	gop [][]byte // 内存缓存最近的若干个 FLV 包，方便新客户端秒开缓存最近一个 GOP（关键帧 + 后续帧）
 
 	// 状态控制相关
-	BrokerCloseSig chan struct{} // 控制当前这个直播是否被关闭
+	BrokerCloseSig chan broker.BROKER_CLOSE_TYPE // 控制当前这个直播是否被关闭
 	once           sync.Once
 
 	// 客户端相关
@@ -46,28 +43,23 @@ type CameraBroker struct {
 
 }
 
-func NewCameraBroker(ctx *gin.Context, maxCache int) *CameraBroker {
+func NewCameraBroker(brokerKey string, maxCache int) *CameraBroker {
 	if maxCache == 0 {
 		maxCache = 150
 	}
-	streamName := ctx.Param("stream")
 	cb := CameraBroker{
-		BrokerKey:      streamName,
-		ctx:            ctx,
-		cache:          make([][]byte, 0),
+		BrokerKey: brokerKey,
+		//cache:          make([][]byte, 0),
 		clientMap:      make(map[string]client.LiveClient),
-		BrokerCloseSig: make(chan struct{}),
+		BrokerCloseSig: make(chan broker.BROKER_CLOSE_TYPE),
 		ClientCloseSig: make(chan string),
-		maxCache:       maxCache,
+		gop:            make([][]byte, 0),
 	}
-
-	// 开始不断接收推流
-	go cb.PullLoop()
 
 	// 开启必要的状态监听
 	go cb.ListenStatus()
 
-	log.Println("开始推流:", streamName)
+	log.Println("开始推流:", brokerKey)
 
 	return &cb
 }
@@ -78,9 +70,9 @@ func (cb *CameraBroker) AddLiveClient(clientId string, client client.LiveClient)
 	cb.clientMap[clientId] = client
 	cb.clientMutex.Unlock()
 
-	// 先发送缓存数据
-	for _, data := range cb.cache {
-		client.Broadcast(data)
+	// 先把缓存的 GOP 发送给新客户端
+	for _, pkt := range cb.gop {
+		client.GetDataChan() <- pkt
 	}
 
 }
@@ -112,28 +104,6 @@ func (cb *CameraBroker) FindLiveClient(clientId string) (client.LiveClient, erro
 // UpdateSourceURL 支持切换直播原地址
 func (cb *CameraBroker) UpdateSourceURL(newSourceURL string) {}
 
-// PullLoop 持续去直播原地址拉流/数据
-func (cb *CameraBroker) PullLoop() {
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := cb.ctx.Request.Body.Read(buf)
-		if n > 0 {
-			data := make([]byte, n)
-			copy(data, buf[:n])
-			// 广播给所有的客户端
-			cb.Broadcast2LiveClient(data)
-		}
-		if err != nil {
-			if err != io.EOF {
-				log.Println("读取错误:", err)
-			}
-			break
-		}
-	}
-	log.Println("推流结束:", cb.BrokerKey)
-}
-
 // ListenStatus 监听当前直播的必要状态
 func (cb *CameraBroker) ListenStatus() {
 	for {
@@ -150,19 +120,42 @@ func (cb *CameraBroker) ListenStatus() {
 	}
 }
 
+// PullLoop 持续去直播原地址拉流/数据
+func (cb *CameraBroker) PullLoop(bo broker.BrokerOptional) {
+
+	data := make([]byte, 4096)
+	for {
+		n, err := bo.GinContext.Request.Body.Read(data)
+		if err != nil {
+			fmt.Println("推流断开:", err)
+			break
+		}
+		packet := make([]byte, n)
+		copy(packet, data[:n])
+		cb.Broadcast2LiveClient(packet)
+	}
+
+}
+
 // Broadcast2LiveClient 原地址拉取到数据之后广播给客户端
 func (cb *CameraBroker) Broadcast2LiveClient(data []byte) {
+	cb.clientMutex.Lock()
+	clientMap := cb.clientMap
+	cb.clientMutex.Unlock()
 
-	cb.cacheRWMutex.Lock()
-	// 添加到缓存
-	cb.cache = append(cb.cache, data)
-	if len(cb.cache) > cb.maxCache {
-		cb.cache = cb.cache[1:]
+	// 简化：这里假设每个 packet 都是关键帧或帧数据
+	// 实际项目中需要解析 FLV tag 判断关键帧
+	isKeyFrame := data[0]&0x10 != 0
+	// 如果是关键帧，重置 GOP 缓存
+	if isKeyFrame {
+		cb.gop = cb.gop[:0]
 	}
-	cb.cacheRWMutex.Unlock()
+	// 缓存
+	cb.gop = append(cb.gop, data)
 
 	// 广播给所有客户端
-	for _, liveClient := range cb.clientMap {
-		go liveClient.Broadcast(data)
+	for _, c := range clientMap {
+		c.GetDataChan() <- data
 	}
+
 }

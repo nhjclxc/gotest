@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	hlsBroadcast "pull2push/core/broadcast/hls"
 	hlsBroker "pull2push/core/broker/hls"
 	"strings"
 )
@@ -76,7 +77,61 @@ func (hlc *HLSLiveClient) Broadcast(data []byte) {
 
 }
 
+// GetDataChan 获取当前客户端的写通道
+func (hlc *HLSLiveClient) GetDataChan() chan []byte {
+	return hlc.DataCh
+}
+
 // ---------- HTTP 服务 ----------
+
+// LiveHLS 处理 hls 的拉流转推
+func LiveHLS(hlsBroadcastPool *hlsBroadcast.HLSBroadcaster) func(c *gin.Context) {
+	return func(c *gin.Context) {
+
+		brokerKey := c.Param("brokerKey")
+		clientId := c.Param("clientId")
+
+		broker, err := hlsBroadcastPool.FindBroker(brokerKey)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"code": 404,
+				"msg":  "直播不存在！！！",
+			})
+			return
+		}
+
+		hlsM3U8Broker, _ := broker.(*hlsBroker.HLSM3U8Broker)
+
+		filepath := c.Param("filepath")
+		//  "xxx/index.m3u8" 结尾的就是第一次请求，这时通过 HandleIndex 接口第一次返回本地缓存的数据片给前端使用
+		if strings.HasSuffix(filepath, "/index.m3u8") {
+
+			hlsLiveClient, err := NewHLSLiveClient(c, brokerKey, clientId, hlsM3U8Broker.ClientCloseSig, hlsM3U8Broker.BrokerCloseSig)
+			if err != nil {
+				c.JSON(500, err)
+				return
+			}
+			hlsM3U8Broker.AddLiveClient(clientId, hlsLiveClient)
+
+			// 第一次链接，返回最新的直播数据分片
+			hlsLiveClient.HandleIndex(c.Writer, c.Request, hlsM3U8Broker)
+
+			return
+		}
+		// xxx/2689.ts 表示此时前端不是第一次掉接口了，是来获取缓存数据分片的，那么通过 HandleSegment 来下载数据分片
+
+		liveClient, err := hlsM3U8Broker.FindLiveClient(clientId)
+		if err != nil {
+			c.JSON(500, err)
+			return
+		}
+		hlsLiveClient, _ := liveClient.(*HLSLiveClient)
+		// 返回本地缓存的数据分片
+		hlsLiveClient.HandleSegment(c.Writer, c.Request, hlsM3U8Broker)
+		// /live/hls/test-hls/c91b431e-ba21-47c9-8649-a05ce2490838/index.m3u8
+
+	}
+}
 
 func (hlc *HLSLiveClient) HandleIndex(w http.ResponseWriter, r *http.Request, hlsM3U8Broker *hlsBroker.HLSM3U8Broker) {
 	// /live/hls/{brokerKey}/{clientID}/index.m3u8
