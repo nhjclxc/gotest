@@ -41,7 +41,7 @@ func main() {
 	router.GET("/news", func(context *gin.Context) {
 		id := context.Query("id")
 		name := context.Query("name")
-		context.String(http.StatusOK, "我是 news 页面【【【2.0需求页面】】】，当前环境是：%#v，现在请求的文章id = %v, name = %v， \n", config.GlobalConfig, id, name)
+		context.String(http.StatusOK, "我是 news 页面【【【2.0.0需求页面】】】，当前环境是：%#v，现在请求的文章id = %v, name = %v， \n", config.GlobalConfig, id, name)
 	})
 
 	// go run main8.go
