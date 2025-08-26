@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 )
 
 func Test111(t *testing.T) {
@@ -175,4 +176,67 @@ func FileSHA512(filename string) (string, error) {
 }
 
 func Test666(t *testing.T) {
+
+	//2025-08-20 14:15:00， 2027245.8 bytes/s, 33.2 Mb/s
+	//fmt.Printf("Mb/s:   %.2f\n", (float64(2027245) * 8 / 1_000_000))
+	//
+	//fmt.Printf("Mb/s:   %.2f\n", (float64(4194310) * 8 / 1_000_000))
+	//
+	//fmt.Printf("Mb/s:   %.2f\n", (float64(4054491) * 8 / 1_000_000))
+	//fmt.Printf("Mb/s:   %.2f\n", (float64(4124393.2) * 8 / 1_000_000))
+
+	fmt.Printf("Mb/s:   %.2f\n", (float64(3635065) * 8 / 1_000_000))
+
+	//2027243
+}
+
+func Test888(t *testing.T) {
+	cst := time.FixedZone("CST", 8*3600)
+	fmt.Println(cst)
+
+	fmt.Println(time.Now())
+
+}
+
+func Test999(t *testing.T) {
+
+	start := time.Date(2025, 8, 21, 9, 30, 0, 0, time.Local)
+	end := time.Date(2025, 8, 21, 10, 0, 0, 0, time.Local)
+	slots := genTimeSlot(start, end, 5)
+	for _, s := range slots {
+		fmt.Println(s)
+	}
+}
+
+// genTimeSlot 生成从 startTime 到 endTime 的时间槽（按 segmentMinutes 分段），返回时间字符串切片
+func genTimeSlot(startTime, endTime time.Time, segmentMinutes int) []string {
+	var slots []string
+
+	// 将 startTime 向上对齐到 segmentMinutes 的倍数
+	min := (startTime.Minute()/segmentMinutes + 1) * segmentMinutes
+	hour := startTime.Hour()
+	day := startTime.Day()
+	month := int(startTime.Month())
+	year := startTime.Year()
+
+	if min >= 60 {
+		min -= 60
+		hour += 1
+		if hour >= 24 {
+			hour = 0
+			startTime = startTime.AddDate(0, 0, 1)
+			year = startTime.Year()
+			month = int(startTime.Month())
+			day = startTime.Day()
+		}
+	}
+
+	current := time.Date(year, time.Month(month), day, hour, min, 0, 0, startTime.Location())
+
+	for !current.After(endTime) {
+		slots = append(slots, current.Format("2006-01-02 15:04:05"))
+		current = current.Add(time.Duration(segmentMinutes) * time.Minute)
+	}
+
+	return slots
 }
