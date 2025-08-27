@@ -10,7 +10,7 @@ type UploadClientsEveryRouter struct {
 	uploadClientsEveryController *controller.UploadClientsEveryController
 }
 
-// NewUploadClientsEveryRouter 创建 UploadClientsE2very UploadClientsEvery 路由Router层
+// NewUploadClientsEveryRouter 创建 UploadClientsEvery 路由Router层
 func NewUploadClientsEveryRouter(uploadClientsEveryController *controller.UploadClientsEveryController) *UploadClientsEveryRouter {
 	return &UploadClientsEveryRouter{
 		uploadClientsEveryController: uploadClientsEveryController,

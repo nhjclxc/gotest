@@ -9,7 +9,7 @@ import (
 
 // UploadClientsEveryReq UploadClientsEvery对象请求结构体
 // @author
-// @date 2025-08-22T10:34:07.338521
+// @date 2025-08-27T10:23:09.789005
 type UploadClientsEveryReq struct {
 	model.UploadClientsEvery
 

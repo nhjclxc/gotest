@@ -14,7 +14,7 @@ type UploadClientsEveryService struct {
 	uploadClientsEveryRepository *repository.UploadClientsEveryRepository
 }
 
-// NewUploadClientsEveryService 创建 UploadClientsEvery 结构体业务层对象
+// NewUploadClientsEveryService 创建 UploadClientsEverploadClientsEvery 业务层对象
 func NewUploadClientsEveryService(db *gorm.DB, uploadClientsEveryRepository *repository.UploadClientsEveryRepository) *UploadClientsEveryService {
 	return &UploadClientsEveryService{
 		db:                           db,
@@ -23,28 +23,27 @@ func NewUploadClientsEveryService(db *gorm.DB, uploadClientsEveryRepository *rep
 }
 
 // InsertUploadClientsEvery 新增UploadClientsEvery
-func (uces *UploadClientsEveryService) InsertUploadClientsEvery(uploadClientsEvery model.UploadClientsEvery) (res any, err error) {
+func (uces *UploadClientsEveryService) InsertUploadClientsEvery(uploadClientsEvery model.UploadClientsEvery) (int, error) {
 
-	return uces.uploadClientsEveryRepository.InsertUploadClientsEvery(uploadClientsEvery)
+	return uces.uploadClientsEveryRepository.InsertUploadClientsEvery(&uploadClientsEvery)
 }
 
 // UpdateUploadClientsEvery 修改UploadClientsEvery
-func (uces *UploadClientsEveryService) UpdateUploadClientsEvery(uploadClientsEvery model.UploadClientsEvery) (res any, err error) {
+func (uces *UploadClientsEveryService) UpdateUploadClientsEvery(uploadClientsEvery model.UploadClientsEvery) (int, error) {
 
-	return uces.uploadClientsEveryRepository.UpdateUploadClientsEveryById(uploadClientsEvery)
+	return uces.uploadClientsEveryRepository.UpdateUploadClientsEveryById(&uploadClientsEvery)
 }
 
 // DeleteUploadClientsEvery 删除UploadClientsEvery
-func (uces *UploadClientsEveryService) DeleteUploadClientsEvery(idList []int64) (res any, err error) {
+func (uces *UploadClientsEveryService) DeleteUploadClientsEvery(idList []int64) (int, error) {
 
 	return uces.uploadClientsEveryRepository.BatchDeleteUploadClientsEvery(idList)
 }
 
 // GetUploadClientsEveryById 获取UploadClientsEvery业务详细信息
-func (uces *UploadClientsEveryService) GetUploadClientsEveryById(id int64) (res any, err error) {
+func (uces *UploadClientsEveryService) GetUploadClientsEveryById(id int64) (*model.UploadClientsEvery, error) {
 
-	uploadClientsEvery := model.UploadClientsEvery{}
-	err = uces.uploadClientsEveryRepository.FindUploadClientsEveryById(id)
+	uploadClientsEvery, err := uces.uploadClientsEveryRepository.FindUploadClientsEveryById(id)
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ const (
 	dst        = "/Users/lxc20250729/lxc/code/gotest/data"
 	url        = "http://192.168.222.182:8484/BU-FENG-ZHUI-YING_FTR_S_CMN-QMS-EN_145M_51_2K_20250724_HXFILM_OV/BU-FENG-ZHUI-YING_FTR_S_CMN-QMS-EN_145M_51_2K_20250724_HXFILM_OV_audio_06.mxf"
 	//url = "http://192.168.222.182:8484/BU-FENG-ZHUI-YING_FTR_S_CMN-QMS-EN_145M_51_2K_20250724_HXFILM_OV/BU-FENG-ZHUI-YING_FTR_S_CMN-QMS-EN_145M_51_2K_20250724_HXFILM_OV_07.mxf"
+
 )
 
 type Aria2Notifer struct {
@@ -148,12 +149,30 @@ func main() {
 
 	exitChan := make(chan bool)
 
+	urls := []string{
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_01.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_02.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_03.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_04.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_audio_01.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_audio_02.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_audio_03.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_audio_04.mxf",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/ASSETMAP",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/CPL_YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV.xml",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/index.json",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/KDM_self_YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_ClipsterDCI_202101016.xml",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/KDM_YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_cert-chain.xml",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/KDM_YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV_dkvm7104.crt.xml",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/PKL_a192859c-fe5e-4f55-a33a-2edd9170df2d.xml",
+		"http://61.158.128.127:8484/YinYueXiaLingYing_FTR-2D-24_S_CMN-QMS_94M_51_2K_20250818_OV/VOLINDEX",
+	}
 	fmt.Println(url)
 
 	connect()
 
 	fmt.Println("arpcClient.download, ", arpcClient)
-	go download(arpcClient, []string{url}, dst, map[string]interface{}{
+	go download(arpcClient, urls, dst, map[string]interface{}{
 		"dir": dst,
 		//"always-resume": "true",
 	})

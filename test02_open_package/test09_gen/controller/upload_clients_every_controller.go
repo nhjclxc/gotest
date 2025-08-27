@@ -14,7 +14,7 @@ type UploadClientsEveryController struct {
 	uploadClientsEveryService *service.UploadClientsEveryService
 }
 
-// NewUploadClientsEveryController 创建 11 UploadClientsEvery 控制器层对象
+// NewUploadClientsEveryController 创建 UploadClientsEveloadClientsEvery 控制器层对象
 func NewUploadClientsEveryController(uploadClientsEveryService *service.UploadClientsEveryService) *UploadClientsEveryController {
 	return &UploadClientsEveryController{
 		uploadClientsEveryService: uploadClientsEveryService,

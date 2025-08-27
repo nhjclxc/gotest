@@ -6,37 +6,49 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"gorm.io/gorm"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 )
 
 // UploadClientsEvery UploadClientsEvery结构体
 // @author
-// @date 2025-08-25T15:32:51.053028
+// @date 2025-08-27T10:23:09.789005
 type UploadClientsEvery struct {
-	Id int `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement;not null" json:"id" form:"id"` //
+	Id uint32 `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement;not null" json:"id" form:"id"` //
 
 	Hostname string `gorm:"column:hostname;type:varchar(255);index:idx_hostname_unique_id,priority:1;index:upload_clients_hostname_unique_id_idx,priority:1" json:"hostname" form:"hostname"` //
 
 	UniqueId string `gorm:"column:unique_id;type:varchar(255);index:idx_hostname_unique_id,priority:2;index:upload_clients_hostname_unique_id_idx,priority:2" json:"uniqueId" form:"uniqueId"` //
 
-	UploadSpeed int `gorm:"column:upload_speed;type:double;comment:bytes/s" json:"uploadSpeed" form:"uploadSpeed"` // bytes/s
+	UploadSpeed float64 `gorm:"column:upload_speed;type:double;comment:bytes/s" json:"uploadSpeed" form:"uploadSpeed"` // bytes/s
 
 	Ctime time.Time `gorm:"column:ctime;type:datetime;index:upload_clients_hostname_unique_id_idx,priority:3" json:"ctime" form:"ctime"` //
+
+	CreatedAt time.Time `gorm:"column:created_at;type:datetime" json:"createdAt"` // 创建时间
+
+	CreatedBy uint64 `gorm:"column:created_by;type:bigint" json:"createdBy"` // 创建人id
+
+	UpdatedAt time.Time `gorm:"column:updated_at;type:datetime" json:"updatedAt"` // 更新时间
+
+	UpdatedBy uint64 `gorm:"column:updated_by;type:bigint" json:"updatedBy"` // 更新人id
+
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:datetime" json:"deletedAt"` // 删除标记, 删除时间 GORM 默认启用了“软删除（Soft Delete）”只要存在这个字段，GORM 默认启用软删除。
+
+	DeletedBy uint64 `gorm:"column:deleted_by;type:bigint" json:"deletedBy"` // 删除人id
 
 }
 
 // TableName 返回当前实体类的表名
 func (uce *UploadClientsEvery) TableName() string {
-	return "upload_clients_every" + strconv.FormatInt(time.Now().Unix(), 10)
+	return "upload_clients_every"
 }
 
 // CreateTable 根据结构体里面的gorm信息创建表结构
 func (uce *UploadClientsEvery) CreateTable(tx *gorm.DB) error {
 	tableName := uce.TableName()
 	if !tx.Migrator().HasTable(tableName) {
-		err := tx.Table(tableName).Migrator().CreateTable(&UploadClientsEvery{})
+		err := tx.Set("gorm:table_options", "ENGINE=InnoDB CHARSET=utf8mb4 COMMENT='UploadClientsEvery'").
+			Table(tableName).Migrator().CreateTable(&UploadClientsEvery{})
 		if err != nil {
 			return err
 		}
@@ -51,10 +63,13 @@ func (uce *UploadClientsEvery) BeforeCreate(tx *gorm.DB) (err error) {
 		return err
 	}
 
+	uce.CreatedAt = time.Now()
+	uce.UpdatedAt = time.Now()
 	return
 }
 
 func (uce *UploadClientsEvery) BeforeUpdate(tx *gorm.DB) (err error) {
+	uce.UpdatedAt = time.Now()
 	return
 }
 

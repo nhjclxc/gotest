@@ -1,4 +1,4 @@
-package test09_gen
+package main
 
 import (
 	"fmt"
